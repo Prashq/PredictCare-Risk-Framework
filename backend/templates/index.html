@@ -1,0 +1,300 @@
+<html>
+    
+<head>
+    <title>PredictCare Risk Framework</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            background: #0f172a;
+            color: white;
+            font-family: 'Segoe UI';
+            text-align: center;
+        }
+
+        .container {
+            background: #1e293b;
+            width: 420px;
+            margin: 18px auto;
+            padding: 25px;
+            border-radius: 15px;
+        }
+
+        .main-titel {
+            font-size: 36px;
+            font-weight: bold;
+            color: #38bdf8;
+            background-color: #1e293b;
+            letter-spacing: 1px;
+            border-radius: 16px;
+            border-bottom: 4px solid #38bdf8;
+            padding-bottom: 10px;
+            margin-inline: 187px;
+        }
+
+        .section-title {
+            font-size: 30px;
+            font-weight: 650;
+            color: #35b5ec;
+            margin-bottom: 20px auto;
+            border-radius: 10px;
+            border-bottom: 2px solid #38bdf8;
+            padding-bottom: 8px;
+        }
+
+        input {
+            width: 90%;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 8px;
+            border: none;
+        }
+
+        button {
+            font-size: 15px;
+            font-weight: 400;
+            padding :9px;
+            padding-inline: 15px;
+            margin: 10px;
+            background: #38bdf8;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .ai-box {
+            margin-top: 20px;
+            text-align: left;
+            background: #020617;
+            padding: 15px;
+            border-radius: 10px;
+            animation: fade 0.5s;
+        }
+
+        @keyframes fade {
+            from {
+                opacity: 0
+            }
+
+            to {
+                opacity: 1
+            }
+        }
+
+        .progress {
+            height: 19px;
+            background: white;
+            margin-top: 10px;
+            margin-inline: 50px;
+        }
+
+        .bar {
+            height: 19px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1 class="main-titel">PredictCare Risk</h1>
+    <div style="display:flex; gap:20px; padding:20px">
+        <div class="container">
+
+            <h2 class="section-title">Risk Analysis</h2>
+
+            <input id="PatientID" placeholder="Patient ID*" >
+            <input id="Name" placeholder="Name*" >
+            <input id="Address" placeholder="Address*" >
+            <input id="Pregnancies" placeholder="Pregnancies">
+            <input id="Glucose" placeholder="Glucose (70-200)" min="50" max="250">
+            <input id="BloodPressure" placeholder="BP" >
+            <input id="SkinThickness" placeholder="Skin" >
+            <input id="Insulin" placeholder="Insulin" >
+            <input id="BMI" placeholder="BMI (15-45)" min="10" max="50" >
+            <input id="DPF" placeholder="DPF" >
+            <input id="Age" placeholder="Age (1-100)" min="1" max="100" >
+
+            <button onclick="predict()">Analyse</button>
+
+            <div class="progress">
+                <div class="bar" id="bar"></div>
+            </div>
+            <div id="output"></div>
+          
+
+        </div>
+        <div class="container">
+
+            <h2 class="section-title">Patient Dashboard</h2>
+
+            <input id="searchBox" placeholder="Search patient name">
+            <button onclick="searchPatient()">Search</button>
+            <button onclick="loadPatients()">Show All</button>
+
+            <div style="display:flex; justify-content:center;">
+                <table border="1" id="table" ></table>
+            </div>
+            <canvas id="riskChart"></canvas>
+
+        </div>
+
+    </div>
+
+    <script>
+        async function predict() {
+            if (
+                !PatientID.value ||
+                !Name.value ||
+                !Glucose.value ||
+                !BMI.value ||
+                !Age.value
+            ) {
+                alert(" Please fill all required fields!");
+                return;
+            }
+
+            if (Glucose.value > 250) {
+                alert("Invalid Glucose Value!");
+                return;
+            }
+
+            let data = {
+                PatientID: PatientID.value,
+                Name: Name.value,
+                Address: Address.value,
+
+                Pregnancies: Number(Pregnancies.value),
+                Glucose: Number(Glucose.value),
+                BloodPressure: Number(BloodPressure.value),
+                SkinThickness: Number(SkinThickness.value),
+                Insulin: Number(Insulin.value),
+                BMI: Number(BMI.value),
+                DiabetesPedigreeFunction: Number(DPF.value),
+                Age: Number(Age.value)
+            };
+
+            let res = await fetch("/predict", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            let r = await res.json();
+
+            let color = r.level == "High" ? "red" : r.level == "Medium" ? "orange" : "green";
+
+            document.getElementById("output").innerHTML = `
+                <div class="ai-box">
+                <h2>Prediction: ${r.prediction}</h2>
+                <h3>Risk: ${r.risk}% (${r.level})</h3>
+
+                <b>Reasons</b>
+                <ul>${r.reasons.map(x => `<li>${x}</li>`).join("")}</ul>
+
+                <b>Advice</b>
+                <ul>${r.advice.map(x => `<li>${x}</li>`).join("")}</ul>
+                </div>
+                `;
+
+            let bar = document.getElementById("bar");
+            bar.style.width = r.risk + "%";
+            bar.style.background = color;
+
+        }
+
+        // SRCH  
+        function searchPatient() {
+            fetch(`/search?name=${searchBox.value}`)
+                .then(res => res.json())
+                .then(data => {
+
+                    let table = document.getElementById("table");
+
+                    table.innerHTML = `
+                        <tr>
+                        <th>ID</th><th>PatientID</th><th>Name</th><th>Risk</th><th>View</th>
+                        </tr>`;
+
+                    data.forEach(row => {
+                        let tr = document.createElement("tr");
+
+                        tr.innerHTML = `
+                            <td>${row[0]}</td>
+                            <td>${row[1]}</td>
+                            <td>${row[2]}</td>
+                            <td>${row[8]}%</td>
+                            <td><button onclick="viewHistory('${row[1]}')">View</button></td>
+                            `;
+
+                        table.appendChild(tr);
+                    });
+                });
+        }
+
+        //FUN
+        function loadPatients() {
+            fetch("/patients")
+                .then(res => res.json())
+                .then(data => {
+
+                    let table = document.getElementById("table");
+
+                    table.innerHTML = `
+                        <tr>
+                        <th>ID</th><th>PatientID</th><th>Name</th><th>Risk</th><th>View</th>
+                        </tr>`;
+
+                    data.forEach(row => {
+                        let tr = document.createElement("tr");
+
+                        tr.innerHTML = `
+                            <td>${row[0]}</td>
+                            <td>${row[1]}</td>
+                            <td>${row[2]}</td>
+                            <td>${row[8]}%</td>
+                            <td><button onclick="viewHistory('${row[1]}')">View</button></td>
+                            `;
+
+                        table.appendChild(tr);
+                    });
+                });
+        }
+
+        // GRPH
+        let chart = null;
+
+        function viewHistory(pid) {
+
+            fetch(`/history/${pid}`)
+                .then(res => res.json())
+                .then(data => {
+
+                    if (!data || data.length === 0) {
+                        alert("No history found for this patient");
+                        return;
+                    }
+
+                    if (chart) {
+                        chart.destroy();
+                    }
+
+                    chart = new Chart(document.getElementById("riskChart"), {
+                        type: "line",
+                        data: {
+                            labels: data.map((_, i) => "Visit " + (i + 1)),
+                            datasets: [{
+                                label: "Risk %",
+                                data: data
+                            }]
+                        }
+                    });
+
+                });
+        }
+
+
+    </script>
+
+</body>
+
+</html>
